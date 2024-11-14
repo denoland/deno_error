@@ -21,6 +21,16 @@ use syn::Member;
 use syn::Meta;
 use syn::Type;
 
+const IDENTIFIABLE_ERRORS: [&str; 7] = [
+  "Error",
+  "RangeError",
+  "TypeError",
+  "SyntaxError",
+  "URIError",
+  "ReferenceError",
+  "NotSupported",
+];
+
 #[proc_macro_derive(JsError, attributes(class, property, inherit))]
 pub fn derive_js_error(
   item: proc_macro::TokenStream,
@@ -297,6 +307,17 @@ impl ClassAttrValue {
     if attr.path().is_ident("class") {
       let list = attr.meta.require_list()?;
       let value = list.parse_args::<Self>()?;
+
+      if let ClassAttrValue::Lit(lit) = &value {
+        println!("{}", lit.value().as_str());
+        if IDENTIFIABLE_ERRORS.contains(&lit.value().as_str()) {
+          return Err(Error::new(
+            lit.span(),
+            "An identifier can be used instead of string",
+          ));
+        }
+      }
+
       return Ok(Some(value));
     }
 

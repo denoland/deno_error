@@ -88,6 +88,7 @@ use std::borrow::Cow;
 /// Various built-in error classes, mainly related to the JavaScript specification.
 /// May include some error classes that are non-standard.
 pub mod builtin_classes {
+  // keep in sync with macros/lib.rs
   pub const GENERIC_ERROR: &str = "Error";
   pub const RANGE_ERROR: &str = "RangeError";
   pub const TYPE_ERROR: &str = "TypeError";
