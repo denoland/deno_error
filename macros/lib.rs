@@ -1,5 +1,7 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 #![deny(clippy::unnecessary_wraps)]
+#![deny(clippy::print_stderr)]
+#![deny(clippy::print_stdout)]
 
 use proc_macro2::Ident;
 use proc_macro2::TokenStream;
@@ -232,27 +234,42 @@ fn handle_variant_or_struct(
   };
 
   let inherit_member = match fields {
-    Fields::Named(fields_named) => fields_named
-      .named
-      .iter()
-      .find(get_inherit_attr_field)
-      .map(|field| {
+    Fields::Named(fields_named) => {
+      let field = if fields_named.named.len() == 1
+        && matches!(class_attr, ClassAttrValue::Inherit(_))
+      {
+        fields_named.named.first()
+      } else {
+        fields_named.named.iter().find(get_inherit_attr_field)
+      };
+
+      field.map(|field| {
         (
           Member::Named(field.ident.clone().unwrap()),
           field_inherit_reference(field),
         )
-      }),
-    Fields::Unnamed(fields_unnamed) => fields_unnamed
-      .unnamed
-      .iter()
-      .enumerate()
-      .find(|(_, field)| get_inherit_attr_field(field))
-      .map(|(i, field)| {
+      })
+    }
+    Fields::Unnamed(fields_unnamed) => {
+      let field = if fields_unnamed.unnamed.len() == 1
+        && matches!(class_attr, ClassAttrValue::Inherit(_))
+      {
+        fields_unnamed.unnamed.first().map(|field| (0, field))
+      } else {
+        fields_unnamed
+          .unnamed
+          .iter()
+          .enumerate()
+          .find(|(_, field)| get_inherit_attr_field(field))
+      };
+
+      field.map(|(i, field)| {
         (
           Member::Unnamed(syn::Index::from(i)),
           field_inherit_reference(field),
         )
-      }),
+      })
+    }
     Fields::Unit => None,
   };
 
@@ -308,14 +325,26 @@ impl ClassAttrValue {
       let list = attr.meta.require_list()?;
       let value = list.parse_args::<Self>()?;
 
-      if let ClassAttrValue::Lit(lit) = &value {
-        println!("{}", lit.value().as_str());
-        if IDENTIFIABLE_ERRORS.contains(&lit.value().as_str()) {
-          return Err(Error::new(
-            lit.span(),
-            "An identifier can be used instead of string",
-          ));
+      match &value {
+        ClassAttrValue::Lit(lit) => {
+          if IDENTIFIABLE_ERRORS.contains(&lit.value().as_str()) {
+            return Err(Error::new(
+              lit.span(),
+              format!("An identifier can be used instead of '{}'", lit.value()),
+            ));
+          }
         }
+        ClassAttrValue::Ident(ident) => {
+          let ident_str = ident.to_string();
+
+          if !ident_str.chars().all(char::is_lowercase) {
+            return Err(Error::new(
+              ident.span(),
+              "Identifier passed is not lowercase",
+            ));
+          }
+        }
+        ClassAttrValue::Inherit(_) => {}
       }
 
       return Ok(Some(value));
@@ -331,14 +360,15 @@ impl ClassAttrValue {
     let class_tokens = match self {
       ClassAttrValue::Lit(lit) => quote!(#lit),
       ClassAttrValue::Ident(ident) => {
-        let error_name = format_ident!("{}_ERROR", ident);
+        let error_name =
+          format_ident!("{}_ERROR", ident.to_string().to_uppercase());
         quote!(::deno_error::builtin_classes::#error_name)
       }
       ClassAttrValue::Inherit(inherit) => {
         let (_, tokens) = inherit_member.as_ref().ok_or_else(|| {
           Error::new(
             inherit.span,
-            "class attribute was set to inherit, but no field was marked as inherit",
+            "class attribute was set to inherit, but multiple fields are available and none was marked as inherit",
           )
         })?;
 

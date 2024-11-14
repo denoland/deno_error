@@ -26,12 +26,15 @@ functionality:
      builtin (see the previous point), it will error out as the special
      identifiers are preferred to avoid mistakes.
   3. `inherit`: this will inherit the class from whatever field is marked with
-     the `#[inherit]` attribute.
+     the `#[inherit]` attribute. Alternatively, the `#[inherit]` attribute can
+     be omitted if only one field is present in the enum variant or struct.
+
 - Define additional properties via the `#[property]` attribute that can be
   defined on individual fields. The type of the field needs to implement a
   `.to_string()` function for it being able to be inherited.
 - Inherit class and properties via the `#[inherit]` attribute which can be
-  specified on fields that contain a value that implements `JsErrorClass`.
+  specified on fields that contain a value that implements `JsErrorClass`. This
+  is inferred if only one field is present in the enum variant or struct.
 
 The macro does not provide functionality to related to the `get_message`
 function, as one can combine the

@@ -1,5 +1,7 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 #![deny(clippy::unnecessary_wraps)]
+#![deny(clippy::print_stderr)]
+#![deny(clippy::print_stdout)]
 
 //! Trait and macros to represent Rust errors in JavaScript.
 //!
@@ -20,7 +22,8 @@
 //!      builtin (see the previous point), it will error out as the special
 //!      identifiers are preferred to avoid mistakes.
 //!   3. `inherit`: this will inherit the class from whatever field is marked with
-//!      the `#[inherit]` attribute.
+//!      the `#[inherit]` attribute. Alternatively, the `#[inherit]` attribute
+//!      can be omitted if only one field is present in the enum variant or struct.
 //!
 //! #### `#[property]`
 //! This attribute allows defining fields as additional properties that should be
@@ -31,7 +34,11 @@
 //!
 //! #### `#[inherit]`
 //! This attribute allows defining a field that should be used to inherit the class
-//! and properties. The class is only inherited if the `class` attribute is set to `inherit`.
+//! and properties.
+//!
+//! This is inferred if only one field is present in the enum variant or struct.
+//!
+//! The class is only inherited if the `class` attribute is set to `inherit`.
 //!
 //! ### Examples
 //!
@@ -39,7 +46,7 @@
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
 //! pub enum SomeError {
-//!   #[class(GENERIC)]
+//!   #[class(generic)]
 //!   #[error("Failure")]
 //!   Failure,
 //!   #[class(inherit)]
@@ -51,7 +58,7 @@
 //! #### Top-level class
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
-//! #[class(GENERIC)]
+//! #[class(generic)]
 //! pub enum SomeError {
 //!   #[error("Failure")]
 //!   Failure,
@@ -64,7 +71,7 @@
 //! #### Defining properties
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
-//! #[class(GENERIC)]
+//! #[class(generic)]
 //! pub enum SomeError {
 //!   #[error("Failure")]
 //!   Failure {
@@ -76,6 +83,26 @@
 //!   #[class(inherit)] // inherit properties from `std::io::Error`
 //!   #[error(transparent)]
 //!   Io(#[inherit] std::io::Error),
+//! }
+//! ```
+//!
+//! #### Inferred inheritance
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(generic)]
+//! #[error("My io error")]
+//! pub struct SomeError(std::io::Error);
+//! ```
+//!
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(generic)]
+//! pub enum SomeError {
+//!   #[error("Failure")]
+//!   Failure,
+//!   #[class(inherit)]
+//!   #[error(transparent)]
+//!   Io(std::io::Error),
 //! }
 //! ```
 
