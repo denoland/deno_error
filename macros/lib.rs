@@ -21,6 +21,7 @@ use syn::Fields;
 use syn::LitStr;
 use syn::Member;
 use syn::Meta;
+use syn::Token;
 use syn::Type;
 
 const IDENTIFIABLE_ERRORS: [&str; 7] = [
@@ -390,6 +391,9 @@ impl Parse for ClassAttrValue {
       Ok(Self::Inherit(input.parse()?))
     } else if lookahead.peek(syn::Ident) {
       Ok(Self::Ident(input.parse()?))
+    } else if lookahead.peek(Token![type]) {
+      let type_token = input.parse::<Token![type]>()?;
+      Ok(Self::Ident(Ident::new("type", type_token.span)))
     } else {
       Err(lookahead.error())
     }

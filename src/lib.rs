@@ -96,7 +96,7 @@
 //!
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
-//! #[class(generic)]
+//! #[class(type)]
 //! pub enum SomeError {
 //!   #[error("Failure")]
 //!   Failure,
