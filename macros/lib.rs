@@ -67,13 +67,18 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       let mut get_properties = vec![];
 
       for variant in data.variants {
+        let class_attr = variant
+          .attrs
+          .into_iter()
+          .find_map(|attr| ClassAttrValue::from_attribute(attr).transpose())
+          .unwrap_or_else(|| {
+            top_class_attr.clone().ok_or_else(|| {
+              Error::new(variant.ident.span(), "class attribute is missing")
+            })
+          })?;
+
         let (class, properties, inherit_member, parsed_properties) =
-          handle_variant_or_struct(
-            &variant.ident,
-            variant.attrs,
-            variant.fields,
-            &top_class_attr,
-          )?;
+          handle_variant_or_struct(class_attr, variant.fields)?;
 
         let variant_ident = variant.ident;
 
@@ -123,13 +128,23 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       )
     }
     Data::Struct(data) => {
+      let class_attr = input
+        .attrs
+        .into_iter()
+        .find_map(|attr| ClassAttrValue::from_attribute(attr).transpose())
+        .unwrap_or_else(|| {
+          if data.fields.len() == 1 {
+            Ok(ClassAttrValue::Inherit(kw::inherit::default()))
+          } else {
+            Err(Error::new(
+              input.ident.span(),
+              "class attribute is missing and could not be inferred",
+            ))
+          }
+        })?;
+
       let (class, properties, member, parsed_properties) =
-        handle_variant_or_struct(
-          &input.ident,
-          input.attrs,
-          data.fields,
-          &None,
-        )?;
+        handle_variant_or_struct(class_attr, data.fields)?;
 
       let specifier_var = member.map(|(member, _)| {
         quote! {
@@ -188,10 +203,8 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
 
 #[allow(clippy::type_complexity)]
 fn handle_variant_or_struct(
-  type_ident: &Ident,
-  attrs: Vec<Attribute>,
+  class_attr: ClassAttrValue,
   fields: Fields,
-  top_class_attr: &Option<ClassAttrValue>,
 ) -> Result<
   (
     TokenStream,
@@ -201,15 +214,6 @@ fn handle_variant_or_struct(
   ),
   Error,
 > {
-  let class_attr = attrs
-    .into_iter()
-    .find_map(|attr| ClassAttrValue::from_attribute(attr).transpose())
-    .unwrap_or_else(|| {
-      top_class_attr.clone().ok_or_else(|| {
-        Error::new(type_ident.span(), "class attribute is missing")
-      })
-    })?;
-
   let parsed_properties = get_properties_from_fields(&fields)?;
 
   let properties = if !parsed_properties.is_empty() {

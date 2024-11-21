@@ -24,6 +24,8 @@
 //!   3. `inherit`: this will inherit the class from whatever field is marked with
 //!      the `#[inherit]` attribute. Alternatively, the `#[inherit]` attribute
 //!      can be omitted if only one field is present in the enum variant or struct.
+//!      This value is inferred if the class attribute is missing and only a single
+//!      field is present on a struct, however for enums this inferring is not done.
 //!
 //! #### `#[property]`
 //! This attribute allows defining fields as additional properties that should be
@@ -89,7 +91,20 @@
 //! #### Inferred inheritance
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
-//! #[class(generic)]
+//! #[error("My io error")]
+//! pub struct SomeError(std::io::Error);
+//! ```
+//!
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(inherit)]
+//! #[error("My io error")]
+//! pub struct SomeError(std::io::Error);
+//! ```
+//!
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(generic)] // don't inherit the error
 //! #[error("My io error")]
 //! pub struct SomeError(std::io::Error);
 //! ```

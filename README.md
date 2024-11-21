@@ -28,6 +28,8 @@ functionality:
   3. `inherit`: this will inherit the class from whatever field is marked with
      the `#[inherit]` attribute. Alternatively, the `#[inherit]` attribute can
      be omitted if only one field is present in the enum variant or struct.
+     This value is inferred if the class attribute is missing and only a single
+     field is present on a struct, however for enums this inferring is not done.
 
 - Define additional properties via the `#[property]` attribute that can be
   defined on individual fields. The type of the field needs to implement a
