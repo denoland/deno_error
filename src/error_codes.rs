@@ -3,7 +3,10 @@
 /// Get the error code for a provided [`std::io::Error`].
 pub fn get_error_code(err: &std::io::Error) -> Option<&'static str> {
   let code = match err.raw_os_error() {
+    #[cfg(any(unix, windows))]
     Some(code) => get_os_error_code(code),
+    #[cfg(all(not(unix), not(windows)))]
+    Some(_) => return None,
     None => get_io_error_code(err),
   };
 
