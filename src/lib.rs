@@ -75,6 +75,7 @@
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
 //! #[class(generic)]
 //! pub enum SomeError {
+//!   #[class(not_supported)]
 //!   #[error("Failure")]
 //!   Failure {
 //!     #[property]

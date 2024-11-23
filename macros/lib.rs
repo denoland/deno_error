@@ -31,7 +31,7 @@ const IDENTIFIABLE_ERRORS: [&str; 7] = [
   "SyntaxError",
   "URIError",
   "ReferenceError",
-  "NotSupported",
+  "NotSupportedError",
 ];
 
 #[proc_macro_derive(JsError, attributes(class, property, inherit))]
@@ -342,7 +342,9 @@ impl ClassAttrValue {
         ClassAttrValue::Ident(ident) => {
           let ident_str = ident.to_string();
 
-          if !ident_str.chars().all(char::is_lowercase) {
+          // needs to call to_lowercase to handle _ since checking if its both
+          // lower or uppercase returns false
+          if ident_str.to_lowercase() != ident_str {
             return Err(Error::new(
               ident.span(),
               "Identifier passed is not lowercase",
