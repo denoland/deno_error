@@ -128,6 +128,7 @@ pub use deno_error_macro::*;
 pub use error_codes::*;
 use std::any::Any;
 use std::borrow::Cow;
+use std::error::Error;
 
 /// Various built-in error classes, mainly related to the JavaScript specification.
 /// May include some error classes that are non-standard.
@@ -150,9 +151,7 @@ use builtin_classes::*;
 /// **Note**:
 /// it is not recommended to manually implement this type, but instead
 /// rather use the [`JsError`] macro.
-pub trait JsErrorClass:
-  std::error::Error + Send + Sync + Any + 'static
-{
+pub trait JsErrorClass: Error + Send + Sync + Any + 'static {
   /// Represents the error class used in JavaScript side.
   fn get_class(&self) -> &'static str;
 
@@ -165,6 +164,7 @@ pub trait JsErrorClass:
   ) -> Vec<(Cow<'static, str>, Cow<'static, str>)>;
 
   fn as_any(&self) -> &dyn Any;
+  fn as_std_error(&self) -> &(dyn Error + 'static);
 }
 
 /// Macro which lets you wrap an existing error in a new error that implements
@@ -231,6 +231,9 @@ macro_rules! js_error_wrapper {
       fn as_any(&self) -> &dyn std::any::Any {
         self
       }
+      fn as_std_error(&self) -> &(dyn std::error::Error + 'static) {
+        self
+      }
     }
     impl std::ops::Deref for $err_name {
       type Target = $err_path;
@@ -258,6 +261,9 @@ impl<T: JsErrorClass> JsErrorClass for Box<T> {
   }
 
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
     self
   }
 }
@@ -313,6 +319,9 @@ impl JsErrorClass for std::io::Error {
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 impl JsErrorClass for std::env::VarError {
@@ -336,6 +345,9 @@ impl JsErrorClass for std::env::VarError {
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 impl JsErrorClass for std::sync::mpsc::RecvError {
@@ -354,6 +366,9 @@ impl JsErrorClass for std::sync::mpsc::RecvError {
   }
 
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
     self
   }
 }
@@ -376,6 +391,9 @@ impl JsErrorClass for std::str::Utf8Error {
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 impl JsErrorClass for std::num::TryFromIntError {
@@ -394,6 +412,9 @@ impl JsErrorClass for std::num::TryFromIntError {
   }
 
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
     self
   }
 }
@@ -429,6 +450,9 @@ impl JsErrorClass for serde_json::Error {
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 #[cfg(feature = "url")]
@@ -448,6 +472,9 @@ impl JsErrorClass for url::ParseError {
   }
 
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
     self
   }
 }
@@ -473,6 +500,9 @@ impl<T: Send + Sync + 'static> JsErrorClass
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 #[cfg(feature = "tokio")]
@@ -492,6 +522,9 @@ impl JsErrorClass for tokio::task::JoinError {
   }
 
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
     self
   }
 }
@@ -515,6 +548,9 @@ impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
   fn as_any(&self) -> &dyn Any {
     self
   }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
+  }
 }
 
 #[derive(Debug)]
@@ -530,7 +566,11 @@ impl std::fmt::Display for JsErrorBox {
   }
 }
 
-impl std::error::Error for JsErrorBox {}
+impl Error for JsErrorBox {
+  fn source(&self) -> Option<&(dyn Error + 'static)> {
+    self.inner.as_ref().map(|e| e.as_std_error())
+  }
+}
 
 impl JsErrorClass for JsErrorBox {
   fn get_class(&self) -> &'static str {
@@ -557,6 +597,9 @@ impl JsErrorClass for JsErrorBox {
     } else {
       self
     }
+  }
+  fn as_std_error(&self) -> &(dyn Error + 'static) {
+    self
   }
 }
 
