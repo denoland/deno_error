@@ -530,7 +530,11 @@ impl std::fmt::Display for JsErrorBox {
   }
 }
 
-impl std::error::Error for JsErrorBox {}
+impl std::error::Error for JsErrorBox {
+  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    self.inner.as_ref().and_then(|e| e.source())
+  }
+}
 
 impl JsErrorClass for JsErrorBox {
   fn get_class(&self) -> &'static str {
