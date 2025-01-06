@@ -194,8 +194,11 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       }
       fn get_additional_properties(
         &self
-      ) -> Option<Vec<(::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>)>> {
+      ) -> Vec<(::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>)> {
         #out_properties
+      }
+      fn as_any(&self) -> &dyn ::std::any::Any {
+        self
       }
     }
   })
@@ -288,17 +291,14 @@ fn handle_variant_or_struct(
     if let Some(properties) = properties {
       quote! {
         let mut properties = #properties;
-        if let Some(inherited_properties) = #inherited_properties {
-          properties.extend(inherited_properties);
-        }
+        properties.extend(#inherited_properties);
         properties
       }
     } else {
       inherited_properties
     }
   } else {
-    properties
-      .map_or_else(|| quote!(None), |properties| quote!(Some(#properties)))
+    properties.map_or_else(|| quote!(vec![]), |properties| quote!(#properties))
   };
 
   Ok((class, properties, inherit_member, parsed_properties))

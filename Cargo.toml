@@ -15,6 +15,7 @@ members = ["macros"]
 [dependencies]
 deno_error_macro = { version = "=0.5.2", path = "macros" }
 libc = "0.2.126"
+thiserror = "2"
 
 tokio = { version = "1", features = ["full"], optional = true }
 url = { version = "2", optional = true }

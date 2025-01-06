@@ -126,6 +126,7 @@ mod error_codes;
 
 pub use deno_error_macro::*;
 pub use error_codes::*;
+use std::any::Any;
 use std::borrow::Cow;
 
 /// Various built-in error classes, mainly related to the JavaScript specification.
@@ -149,7 +150,9 @@ use builtin_classes::*;
 /// **Note**:
 /// it is not recommended to manually implement this type, but instead
 /// rather use the [`JsError`] macro.
-pub trait JsErrorClass: std::error::Error + Send + Sync + 'static {
+pub trait JsErrorClass:
+  std::error::Error + Send + Sync + Any + 'static
+{
   /// Represents the error class used in JavaScript side.
   fn get_class(&self) -> &'static str;
 
@@ -159,7 +162,9 @@ pub trait JsErrorClass: std::error::Error + Send + Sync + 'static {
   /// Additional properties that should be defined on the error in JavaScript side.
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>>;
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)>;
+
+  fn as_any(&self) -> &dyn Any;
 }
 
 /// Macro which lets you wrap an existing error in a new error that implements
@@ -217,13 +222,14 @@ macro_rules! js_error_wrapper {
       }
       fn get_additional_properties(
         &self,
-      ) -> Option<
-        Vec<(
-          std::borrow::Cow<'static, str>,
-          std::borrow::Cow<'static, str>,
-        )>,
-      > {
-        None
+      ) -> Vec<(
+        std::borrow::Cow<'static, str>,
+        std::borrow::Cow<'static, str>,
+      )> {
+        vec![]
+      }
+      fn as_any(&self) -> &dyn std::any::Any {
+        self
       }
     }
     impl std::ops::Deref for $err_name {
@@ -234,6 +240,26 @@ macro_rules! js_error_wrapper {
       }
     }
   };
+}
+
+impl<T: JsErrorClass> JsErrorClass for Box<T> {
+  fn get_class(&self) -> &'static str {
+    (**self).get_class()
+  }
+
+  fn get_message(&self) -> Cow<'static, str> {
+    (**self).get_message()
+  }
+
+  fn get_additional_properties(
+    &self,
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    (**self).get_additional_properties()
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 impl JsErrorClass for std::io::Error {
@@ -278,8 +304,14 @@ impl JsErrorClass for std::io::Error {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    get_error_code(self).map(|code| vec![("code".into(), code.into())])
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    get_error_code(self)
+      .map(|code| vec![("code".into(), code.into())])
+      .unwrap_or_default()
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -297,8 +329,12 @@ impl JsErrorClass for std::env::VarError {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -313,8 +349,12 @@ impl JsErrorClass for std::sync::mpsc::RecvError {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -329,8 +369,12 @@ impl JsErrorClass for std::str::Utf8Error {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -345,8 +389,12 @@ impl JsErrorClass for std::num::TryFromIntError {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -374,8 +422,12 @@ impl JsErrorClass for serde_json::Error {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None // TODO: could be io error code
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![] // TODO: could be io error code
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -391,8 +443,12 @@ impl JsErrorClass for url::ParseError {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -410,8 +466,12 @@ impl<T: Send + Sync + 'static> JsErrorClass
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -427,7 +487,117 @@ impl JsErrorClass for tokio::task::JoinError {
 
   fn get_additional_properties(
     &self,
-  ) -> Option<Vec<(Cow<'static, str>, Cow<'static, str>)>> {
-    None
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+
+#[cfg(feature = "tokio")]
+impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
+  fn get_class(&self) -> &'static str {
+    GENERIC_ERROR
+  }
+
+  fn get_message(&self) -> Cow<'static, str> {
+    self.to_string().into()
+  }
+
+  fn get_additional_properties(
+    &self,
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    vec![]
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+
+#[derive(Debug)]
+pub struct JsErrorBox {
+  class: &'static str,
+  message: Cow<'static, str>,
+  pub inner: Option<Box<dyn JsErrorClass>>,
+}
+
+impl std::fmt::Display for JsErrorBox {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.message)
+  }
+}
+
+impl std::error::Error for JsErrorBox {}
+
+impl JsErrorClass for JsErrorBox {
+  fn get_class(&self) -> &'static str {
+    self.class
+  }
+
+  fn get_message(&self) -> Cow<'static, str> {
+    self.message.clone()
+  }
+
+  fn get_additional_properties(
+    &self,
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    self
+      .inner
+      .as_ref()
+      .map(|source| source.get_additional_properties())
+      .unwrap_or_default()
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    if let Some(err) = &self.inner {
+      err.as_any()
+    } else {
+      self
+    }
+  }
+}
+
+impl JsErrorBox {
+  pub fn new(
+    class: &'static str,
+    message: impl Into<Cow<'static, str>>,
+  ) -> JsErrorBox {
+    JsErrorBox {
+      class,
+      message: message.into(),
+      inner: None,
+    }
+  }
+
+  pub fn from_err<T: JsErrorClass>(err: T) -> Self {
+    Self {
+      class: err.get_class(),
+      message: err.get_message(),
+      inner: Some(Box::new(err)),
+    }
+  }
+
+  pub fn generic(message: impl Into<Cow<'static, str>>) -> JsErrorBox {
+    Self::new(GENERIC_ERROR, message)
+  }
+
+  pub fn type_error(message: impl Into<Cow<'static, str>>) -> JsErrorBox {
+    Self::new(TYPE_ERROR, message)
+  }
+
+  pub fn range_error(message: impl Into<Cow<'static, str>>) -> JsErrorBox {
+    Self::new(RANGE_ERROR, message)
+  }
+
+  pub fn uri_error(message: impl Into<Cow<'static, str>>) -> JsErrorBox {
+    Self::new(URI_ERROR, message)
+  }
+
+  // Non-standard errors
+  pub fn not_supported() -> JsErrorBox {
+    Self::new(NOT_SUPPORTED_ERROR, "The operation is not supported")
   }
 }
