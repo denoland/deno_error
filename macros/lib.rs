@@ -186,7 +186,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
   Ok(quote! {
     #[allow(unused_qualifications)]
     impl ::deno_error::JsErrorClass for #ident {
-      fn get_class(&self) -> &'static str {
+      fn get_class(&self) -> ::std::borrow::Cow<'static, str> {
         #class
       }
       fn get_message(&self) -> ::std::borrow::Cow<'static, str> {
@@ -365,11 +365,11 @@ impl ClassAttrValue {
     inherit_member: &Option<(Member, TokenStream)>,
   ) -> Result<TokenStream, Error> {
     let class_tokens = match self {
-      ClassAttrValue::Lit(lit) => quote!(#lit),
+      ClassAttrValue::Lit(lit) => quote!(::std::borrow::Cow::Borrowed(#lit)),
       ClassAttrValue::Ident(ident) => {
         let error_name =
           format_ident!("{}_ERROR", ident.to_string().to_uppercase());
-        quote!(::deno_error::builtin_classes::#error_name)
+        quote!(::std::borrow::Cow::Borrowed(::deno_error::builtin_classes::#error_name))
       }
       ClassAttrValue::Inherit(inherit) => {
         let (_, tokens) = inherit_member.as_ref().ok_or_else(|| {
