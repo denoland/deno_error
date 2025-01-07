@@ -154,7 +154,7 @@ pub trait JsErrorClass:
   std::error::Error + Send + Sync + Any + 'static
 {
   /// Represents the error class used in JavaScript side.
-  fn get_class(&self) -> &'static str;
+  fn get_class(&self) -> Cow<'static, str>;
 
   /// Represents the error message used in JavaScript side.
   fn get_message(&self) -> Cow<'static, str>;
@@ -199,7 +199,9 @@ macro_rules! js_error_wrapper {
       }
     }
     impl $err_name {
-      pub fn get_error_class($inner: &$err_path) -> &'static str {
+      pub fn get_error_class(
+        $inner: &$err_path,
+      ) -> impl Into<std::borrow::Cow<'static, str>> {
         $js_err_type
       }
     }
@@ -214,8 +216,8 @@ macro_rules! js_error_wrapper {
       }
     }
     impl deno_error::JsErrorClass for $err_name {
-      fn get_class(&self) -> &'static str {
-        Self::get_error_class(&self.0)
+      fn get_class(&self) -> std::borrow::Cow<'static, str> {
+        Self::get_error_class(&self.0).into()
       }
       fn get_message(&self) -> std::borrow::Cow<'static, str> {
         self.to_string().into()
@@ -243,7 +245,7 @@ macro_rules! js_error_wrapper {
 }
 
 impl<T: JsErrorClass> JsErrorClass for Box<T> {
-  fn get_class(&self) -> &'static str {
+  fn get_class(&self) -> Cow<'static, str> {
     (**self).get_class()
   }
 
@@ -263,10 +265,10 @@ impl<T: JsErrorClass> JsErrorClass for Box<T> {
 }
 
 impl JsErrorClass for std::io::Error {
-  fn get_class(&self) -> &'static str {
+  fn get_class(&self) -> Cow<'static, str> {
     use std::io::ErrorKind::*;
 
-    match self.kind() {
+    let class = match self.kind() {
       NotFound => "NotFound",
       PermissionDenied => "PermissionDenied",
       ConnectionRefused => "ConnectionRefused",
@@ -295,7 +297,9 @@ impl JsErrorClass for std::io::Error {
           _ => GENERIC_ERROR,
         }
       }
-    }
+    };
+
+    Cow::Borrowed(class)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -316,11 +320,11 @@ impl JsErrorClass for std::io::Error {
 }
 
 impl JsErrorClass for std::env::VarError {
-  fn get_class(&self) -> &'static str {
-    match self {
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(match self {
       std::env::VarError::NotPresent => "NotFound",
       std::env::VarError::NotUnicode(..) => "InvalidData",
-    }
+    })
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -339,8 +343,8 @@ impl JsErrorClass for std::env::VarError {
 }
 
 impl JsErrorClass for std::sync::mpsc::RecvError {
-  fn get_class(&self) -> &'static str {
-    GENERIC_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(GENERIC_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -359,8 +363,8 @@ impl JsErrorClass for std::sync::mpsc::RecvError {
 }
 
 impl JsErrorClass for std::str::Utf8Error {
-  fn get_class(&self) -> &'static str {
-    GENERIC_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(GENERIC_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -379,8 +383,8 @@ impl JsErrorClass for std::str::Utf8Error {
 }
 
 impl JsErrorClass for std::num::TryFromIntError {
-  fn get_class(&self) -> &'static str {
-    TYPE_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(TYPE_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -400,7 +404,7 @@ impl JsErrorClass for std::num::TryFromIntError {
 
 #[cfg(all(feature = "serde", feature = "serde_json"))]
 impl JsErrorClass for serde_json::Error {
-  fn get_class(&self) -> &'static str {
+  fn get_class(&self) -> Cow<'static, str> {
     use serde::de::StdError;
     use serde_json::error::*;
 
@@ -410,9 +414,9 @@ impl JsErrorClass for serde_json::Error {
         .and_then(|e| e.downcast_ref::<std::io::Error>())
         .unwrap()
         .get_class(),
-      Category::Syntax => SYNTAX_ERROR,
-      Category::Data => "InvalidData",
-      Category::Eof => "UnexpectedEof",
+      Category::Syntax => Cow::Borrowed(SYNTAX_ERROR),
+      Category::Data => Cow::Borrowed("InvalidData"),
+      Category::Eof => Cow::Borrowed("UnexpectedEof"),
     }
   }
 
@@ -433,8 +437,8 @@ impl JsErrorClass for serde_json::Error {
 
 #[cfg(feature = "url")]
 impl JsErrorClass for url::ParseError {
-  fn get_class(&self) -> &'static str {
-    URI_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(URI_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -456,8 +460,8 @@ impl JsErrorClass for url::ParseError {
 impl<T: Send + Sync + 'static> JsErrorClass
   for tokio::sync::mpsc::error::SendError<T>
 {
-  fn get_class(&self) -> &'static str {
-    GENERIC_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(GENERIC_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -477,8 +481,8 @@ impl<T: Send + Sync + 'static> JsErrorClass
 
 #[cfg(feature = "tokio")]
 impl JsErrorClass for tokio::task::JoinError {
-  fn get_class(&self) -> &'static str {
-    GENERIC_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(GENERIC_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -498,8 +502,8 @@ impl JsErrorClass for tokio::task::JoinError {
 
 #[cfg(feature = "tokio")]
 impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
-  fn get_class(&self) -> &'static str {
-    GENERIC_ERROR
+  fn get_class(&self) -> Cow<'static, str> {
+    Cow::Borrowed(GENERIC_ERROR)
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -519,7 +523,7 @@ impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
 
 #[derive(Debug)]
 pub struct JsErrorBox {
-  class: &'static str,
+  class: Cow<'static, str>,
   message: Cow<'static, str>,
   pub inner: Option<Box<dyn JsErrorClass>>,
 }
@@ -537,8 +541,8 @@ impl std::error::Error for JsErrorBox {
 }
 
 impl JsErrorClass for JsErrorBox {
-  fn get_class(&self) -> &'static str {
-    self.class
+  fn get_class(&self) -> Cow<'static, str> {
+    self.class.clone()
   }
 
   fn get_message(&self) -> Cow<'static, str> {
@@ -566,11 +570,11 @@ impl JsErrorClass for JsErrorBox {
 
 impl JsErrorBox {
   pub fn new(
-    class: &'static str,
+    class: impl Into<Cow<'static, str>>,
     message: impl Into<Cow<'static, str>>,
   ) -> JsErrorBox {
     JsErrorBox {
-      class,
+      class: class.into(),
       message: message.into(),
       inner: None,
     }
