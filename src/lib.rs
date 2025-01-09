@@ -530,7 +530,7 @@ pub struct JsErrorBox {
 
 impl std::fmt::Display for JsErrorBox {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.message)
+    write!(f, "{}", self.get_message())
   }
 }
 
@@ -542,26 +542,34 @@ impl std::error::Error for JsErrorBox {
 
 impl JsErrorClass for JsErrorBox {
   fn get_class(&self) -> Cow<'static, str> {
-    self.class.clone()
+    if let Some(inner) = &self.inner {
+      inner.get_class()
+    } else {
+      self.class.clone()
+    }
   }
 
   fn get_message(&self) -> Cow<'static, str> {
-    self.message.clone()
+    if let Some(inner) = &self.inner {
+      inner.get_message()
+    } else {
+      self.message.clone()
+    }
   }
 
   fn get_additional_properties(
     &self,
   ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    self
-      .inner
-      .as_ref()
-      .map(|source| source.get_additional_properties())
-      .unwrap_or_default()
+    if let Some(inner) = &self.inner {
+      inner.get_additional_properties()
+    } else {
+      vec![]
+    }
   }
 
   fn as_any(&self) -> &dyn Any {
-    if let Some(err) = &self.inner {
-      err.as_any()
+    if let Some(inner) = &self.inner {
+      inner.as_any()
     } else {
       self
     }
@@ -582,8 +590,8 @@ impl JsErrorBox {
 
   pub fn from_err<T: JsErrorClass>(err: T) -> Self {
     Self {
-      class: err.get_class(),
-      message: err.get_message(),
+      class: Cow::Borrowed(""),
+      message: Cow::Borrowed(""),
       inner: Some(Box::new(err)),
     }
   }
