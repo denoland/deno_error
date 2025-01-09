@@ -2,7 +2,7 @@
 
 [package]
 name = "deno_error_macro"
-version = "0.5.3"
+version = "0.5.4"
 description = "Macro for writing Deno errors"
 homepage = "https://deno.land/"
 repository = "https://github.com/denoland/deno_error"
