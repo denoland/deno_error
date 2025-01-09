@@ -521,49 +521,77 @@ impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
   }
 }
 
-#[derive(Debug)]
-pub struct JsErrorBox {
-  class: Cow<'static, str>,
-  message: Cow<'static, str>,
-  pub inner: Option<Box<dyn JsErrorClass>>,
+enum JsErrorBoxInner {
+  Standalone {
+    class: Cow<'static, str>,
+    message: Cow<'static, str>,
+  },
+  Wrap(Box<dyn JsErrorClass>),
+}
+
+pub struct JsErrorBox(JsErrorBoxInner);
+
+impl std::fmt::Debug for JsErrorBox {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let mut debug = f.debug_struct("JsErrorBox");
+
+    match &self.0 {
+      JsErrorBoxInner::Standalone { class, message } => {
+        debug.field("class", class);
+        debug.field("message", message);
+      }
+      JsErrorBoxInner::Wrap(inner) => {
+        debug.field("inner", inner);
+      }
+    }
+
+    debug.finish()
+  }
 }
 
 impl std::fmt::Display for JsErrorBox {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.message)
+    write!(f, "{}", self.get_message())
   }
 }
 
 impl std::error::Error for JsErrorBox {
   fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-    self.inner.as_ref().and_then(|e| e.source())
+    match &self.0 {
+      JsErrorBoxInner::Standalone { .. } => None,
+      JsErrorBoxInner::Wrap(inner) => inner.source(),
+    }
   }
 }
 
 impl JsErrorClass for JsErrorBox {
   fn get_class(&self) -> Cow<'static, str> {
-    self.class.clone()
+    match &self.0 {
+      JsErrorBoxInner::Standalone { class, .. } => class.clone(),
+      JsErrorBoxInner::Wrap(inner) => inner.get_class(),
+    }
   }
 
   fn get_message(&self) -> Cow<'static, str> {
-    self.message.clone()
+    match &self.0 {
+      JsErrorBoxInner::Standalone { message, .. } => message.clone(),
+      JsErrorBoxInner::Wrap(inner) => inner.get_message(),
+    }
   }
 
   fn get_additional_properties(
     &self,
   ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    self
-      .inner
-      .as_ref()
-      .map(|source| source.get_additional_properties())
-      .unwrap_or_default()
+    match &self.0 {
+      JsErrorBoxInner::Standalone { .. } => vec![],
+      JsErrorBoxInner::Wrap(inner) => inner.get_additional_properties(),
+    }
   }
 
   fn as_any(&self) -> &dyn Any {
-    if let Some(err) = &self.inner {
-      err.as_any()
-    } else {
-      self
+    match &self.0 {
+      JsErrorBoxInner::Standalone { .. } => self,
+      JsErrorBoxInner::Wrap(inner) => inner.as_any(),
     }
   }
 }
@@ -572,20 +600,15 @@ impl JsErrorBox {
   pub fn new(
     class: impl Into<Cow<'static, str>>,
     message: impl Into<Cow<'static, str>>,
-  ) -> JsErrorBox {
-    JsErrorBox {
+  ) -> Self {
+    Self(JsErrorBoxInner::Standalone {
       class: class.into(),
       message: message.into(),
-      inner: None,
-    }
+    })
   }
 
   pub fn from_err<T: JsErrorClass>(err: T) -> Self {
-    Self {
-      class: err.get_class(),
-      message: err.get_message(),
-      inner: Some(Box::new(err)),
-    }
+    Self(JsErrorBoxInner::Wrap(Box::new(err)))
   }
 
   pub fn generic(message: impl Into<Cow<'static, str>>) -> JsErrorBox {
