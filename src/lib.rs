@@ -402,6 +402,26 @@ impl JsErrorClass for std::num::TryFromIntError {
   }
 }
 
+impl JsErrorClass for std::convert::Infallible {
+  fn get_class(&self) -> Cow<'static, str> {
+    unreachable!()
+  }
+
+  fn get_message(&self) -> Cow<'static, str> {
+    unreachable!()
+  }
+
+  fn get_additional_properties(
+    &self,
+  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    unreachable!()
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    unreachable!()
+  }
+}
+
 #[cfg(all(feature = "serde", feature = "serde_json"))]
 impl JsErrorClass for serde_json::Error {
   fn get_class(&self) -> Cow<'static, str> {
