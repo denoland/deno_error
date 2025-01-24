@@ -47,6 +47,18 @@ pub fn derive_js_error(
 fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
   let input = parse2::<DeriveInput>(item)?;
 
+  let additional_properties = input
+    .attrs
+    .iter()
+    .filter_map(|attr| {
+      if attr.path().is_ident("property") {
+        Some(attr.parse_args())
+      } else {
+        None
+      }
+    })
+    .collect::<Result<Vec<AdditionalProperty>, Error>>()?;
+
   let (class, out_properties) = match input.data {
     Data::Enum(data) => {
       let top_class_attr = input
@@ -181,6 +193,20 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
     }
   };
 
+  let properties = if !additional_properties.is_empty() {
+    let additional_properties = additional_properties
+      .into_iter()
+      .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
+
+    quote! {
+      let mut out = #out_properties;
+      out.append(&mut vec![#(#additional_properties),*]);
+      out
+    }
+  } else {
+    quote!(#out_properties)
+  };
+
   let ident = input.ident;
 
   Ok(quote! {
@@ -195,7 +221,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       fn get_additional_properties(
         &self
       ) -> Vec<(::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>)> {
-        #out_properties
+        #properties
       }
       fn as_any(&self) -> &dyn ::std::any::Any {
         self
@@ -213,7 +239,7 @@ fn handle_variant_or_struct(
     TokenStream,
     TokenStream,
     Option<(Member, TokenStream)>,
-    Vec<ParsedProperty>,
+    Vec<ParsedFieldProperty>,
   ),
   Error,
 > {
@@ -407,14 +433,14 @@ impl Parse for ClassAttrValue {
 }
 
 #[derive(Debug)]
-struct ParsedProperty {
+struct ParsedFieldProperty {
   ident: Member,
   name: String,
 }
 
 fn get_properties_from_fields(
   fields: &Fields,
-) -> Result<Vec<ParsedProperty>, Error> {
+) -> Result<Vec<ParsedFieldProperty>, Error> {
   const PROPERTY_IDENT: &str = "property";
   let mut out_fields = vec![];
 
@@ -439,7 +465,7 @@ fn get_properties_from_fields(
             let ident = field.ident.clone().unwrap();
             let name = name.unwrap_or_else(|| ident.to_string());
             let ident = Member::Named(field.ident.clone().unwrap());
-            out_fields.push(ParsedProperty { name, ident });
+            out_fields.push(ParsedFieldProperty { name, ident });
 
             break;
           }
@@ -455,7 +481,7 @@ fn get_properties_from_fields(
               parse2::<LitStr>(name_value.value.to_token_stream())?.value();
 
             let ident = Member::Unnamed(syn::Index::from(i));
-            out_fields.push(ParsedProperty { name, ident });
+            out_fields.push(ParsedFieldProperty { name, ident });
 
             break;
           }
@@ -466,6 +492,23 @@ fn get_properties_from_fields(
   }
 
   Ok(out_fields)
+}
+
+#[derive(Debug)]
+struct AdditionalProperty {
+  name: LitStr,
+  _eq: Token![=],
+  value: syn::Expr,
+}
+
+impl Parse for AdditionalProperty {
+  fn parse(input: ParseStream) -> syn::Result<Self> {
+    Ok(Self {
+      name: input.parse()?,
+      _eq: input.parse()?,
+      value: input.parse()?,
+    })
+  }
 }
 
 fn field_inherit_reference(field: &Field) -> TokenStream {
