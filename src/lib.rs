@@ -89,6 +89,22 @@
 //! }
 //! ```
 //!
+//! ##### Defining external properties
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[property("code" = 10)]
+//! #[property("kind" = self.get_name())]
+//! #[class(generic)]
+//! #[error(transparent)]
+//! pub struct SomeError(std::io::Error);
+//!
+//! impl SomeError {
+//!   fn get_name(&self) -> String {
+//!     self.0.kind().to_string()
+//!   }
+//! }
+//! ```
+//!
 //! #### Inferred inheritance
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]
