@@ -303,11 +303,11 @@ impl JsErrorClass for std::io::Error {
       UnexpectedEof => "UnexpectedEof",
       Other => GENERIC_ERROR,
       WouldBlock => "WouldBlock",
+      IsADirectory => "IsADirectory",
+      NetworkUnreachable => "NetworkUnreachable",
+      NotADirectory => "NotADirectory",
       kind => match format!("{kind:?}").as_str() {
         "FilesystemLoop" => "FilesystemLoop",
-        "IsADirectory" => "IsADirectory",
-        "NetworkUnreachable" => "NetworkUnreachable",
-        "NotADirectory" => "NotADirectory",
         _ => GENERIC_ERROR,
       },
     };
