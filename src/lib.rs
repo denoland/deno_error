@@ -303,16 +303,13 @@ impl JsErrorClass for std::io::Error {
       UnexpectedEof => "UnexpectedEof",
       Other => GENERIC_ERROR,
       WouldBlock => "WouldBlock",
-      kind => {
-        let kind_str = kind.to_string();
-        match kind_str.as_str() {
-          "FilesystemLoop" => "FilesystemLoop",
-          "IsADirectory" => "IsADirectory",
-          "NetworkUnreachable" => "NetworkUnreachable",
-          "NotADirectory" => "NotADirectory",
-          _ => GENERIC_ERROR,
-        }
-      }
+      IsADirectory => "IsADirectory",
+      NetworkUnreachable => "NetworkUnreachable",
+      NotADirectory => "NotADirectory",
+      kind => match format!("{kind:?}").as_str() {
+        "FilesystemLoop" => "FilesystemLoop",
+        _ => GENERIC_ERROR,
+      },
     };
 
     Cow::Borrowed(class)
@@ -666,5 +663,29 @@ impl JsErrorBox {
   // Non-standard errors
   pub fn not_supported() -> JsErrorBox {
     Self::new(NOT_SUPPORTED_ERROR, "The operation is not supported")
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::io;
+
+  use super::JsErrorClass;
+
+  #[test]
+  fn test_io_error_class_stable() {
+    assert_eq!(
+      io::Error::new(io::ErrorKind::NotFound, "").get_class(),
+      "NotFound",
+    );
+  }
+
+  #[test]
+  #[cfg(unix)]
+  fn test_io_error_class_unstable() {
+    assert_eq!(
+      io::Error::from_raw_os_error(libc::ELOOP).get_class(),
+      "FilesystemLoop",
+    );
   }
 }
