@@ -128,6 +128,27 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
 
         let variant_ident = variant.ident;
 
+        let class_match_arm_identifiers = {
+          let mut parsed_properties = parsed_properties
+            .iter()
+            .enumerate()
+            .map(|(i, property)| {
+              let i = format_ident!("__{i}");
+              let member = &property.ident;
+              quote!(#member: #i,)
+            })
+            .collect::<Vec<_>>();
+
+          if let Some((member, _)) = &_inherit_class_member {
+            parsed_properties.push(quote!(#member: inherit,));
+          }
+
+          parsed_properties
+        };
+
+        let class_match_arm =
+          quote!(Self::#variant_ident { #(#class_match_arm_identifiers)* .. });
+
         let match_arm_identifiers = {
           let mut parsed_properties = parsed_properties
             .into_iter()
@@ -150,7 +171,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
           quote!(Self::#variant_ident { #(#match_arm_identifiers)* .. });
 
         get_class.push(quote! {
-          #match_arm => #class,
+          #class_match_arm => #class,
         });
 
         get_properties.push(quote! {
