@@ -105,6 +105,24 @@
 //! }
 //! ```
 //!
+//! #### Explicit property inheritance
+//!
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(generic)]
+//! #[properties(inherit)]
+//! #[error(transparent)]
+//! pub struct SomeError(std::io::Error);
+//! ```
+//!
+//! ```
+//! #[derive(Debug, thiserror::Error, deno_error::JsError)]
+//! #[class(inherit)]
+//! #[properties(no_inherit)]
+//! #[error(transparent)]
+//! pub struct SomeError(std::io::Error);
+//! ```
+//!
 //! #### Inferred inheritance
 //! ```
 //! #[derive(Debug, thiserror::Error, deno_error::JsError)]

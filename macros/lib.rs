@@ -34,7 +34,7 @@ const IDENTIFIABLE_ERRORS: [&str; 7] = [
   "NotSupportedError",
 ];
 
-#[proc_macro_derive(JsError, attributes(class, property, inherit))]
+#[proc_macro_derive(JsError, attributes(class, property, properties, inherit))]
 pub fn derive_js_error(
   item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -79,6 +79,30 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       let mut get_properties = vec![];
 
       for variant in data.variants {
+        let variant_additional_properties = variant
+          .attrs
+          .iter()
+          .filter_map(|attr| {
+            if attr.path().is_ident("property") {
+              Some(attr.parse_args())
+            } else {
+              None
+            }
+          })
+          .collect::<Result<Vec<AdditionalProperty>, Error>>()?;
+
+        let inherit_properties = variant
+          .attrs
+          .iter()
+          .find_map(|attr| {
+            if attr.path().is_ident("properties") {
+              Some(attr.parse_args::<InheritProperties>())
+            } else {
+              None
+            }
+          })
+          .transpose()?;
+
         let class_attr = variant
           .attrs
           .into_iter()
@@ -89,10 +113,41 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
             })
           })?;
 
-        let (class, properties, inherit_member, parsed_properties) =
-          handle_variant_or_struct(class_attr, variant.fields)?;
+        let (
+          class,
+          properties,
+          _inherit_class_member,
+          inherit_property_member,
+          parsed_properties,
+        ) = handle_variant_or_struct(
+          inherit_properties,
+          class_attr,
+          variant_additional_properties,
+          variant.fields,
+        )?;
 
         let variant_ident = variant.ident;
+
+        let class_match_arm_identifiers = {
+          let mut parsed_properties = parsed_properties
+            .iter()
+            .enumerate()
+            .map(|(i, property)| {
+              let i = format_ident!("__{i}");
+              let member = &property.ident;
+              quote!(#member: #i,)
+            })
+            .collect::<Vec<_>>();
+
+          if let Some((member, _)) = &_inherit_class_member {
+            parsed_properties.push(quote!(#member: inherit,));
+          }
+
+          parsed_properties
+        };
+
+        let class_match_arm =
+          quote!(Self::#variant_ident { #(#class_match_arm_identifiers)* .. });
 
         let match_arm_identifiers = {
           let mut parsed_properties = parsed_properties
@@ -105,7 +160,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
             })
             .collect::<Vec<_>>();
 
-          if let Some((member, _)) = &inherit_member {
+          if let Some((member, _)) = &inherit_property_member {
             parsed_properties.push(quote!(#member: inherit,));
           }
 
@@ -116,7 +171,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
           quote!(Self::#variant_ident { #(#match_arm_identifiers)* .. });
 
         get_class.push(quote! {
-          #match_arm => #class,
+          #class_match_arm => #class,
         });
 
         get_properties.push(quote! {
@@ -140,6 +195,18 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       )
     }
     Data::Struct(data) => {
+      let inherit_properties = input
+        .attrs
+        .iter()
+        .find_map(|attr| {
+          if attr.path().is_ident("properties") {
+            Some(attr.parse_args::<InheritProperties>())
+          } else {
+            None
+          }
+        })
+        .transpose()?;
+
       let class_attr = input
         .attrs
         .into_iter()
@@ -155,14 +222,31 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
           }
         })?;
 
-      let (class, properties, member, parsed_properties) =
-        handle_variant_or_struct(class_attr, data.fields)?;
+      let (
+        class,
+        properties,
+        inherit_class_member,
+        inherit_property_member,
+        parsed_properties,
+      ) = handle_variant_or_struct(
+        inherit_properties,
+        class_attr,
+        vec![],
+        data.fields,
+      )?;
 
-      let specifier_var = member.map(|(member, _)| {
+      let class_specifier_var = inherit_class_member.map(|(member, _)| {
         quote! {
           let inherit = &self.#member;
         }
       });
+
+      let property_specifier_var =
+        inherit_property_member.map(|(member, _)| {
+          quote! {
+            let inherit = &self.#member;
+          }
+        });
 
       let parsed_properties = parsed_properties
         .into_iter()
@@ -178,13 +262,15 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
 
       (
         quote! {
-          #specifier_var
+          #class_specifier_var
           #class
         },
         quote! {
-          #specifier_var
-           #(#parsed_properties)*
-          #properties
+          {
+            #property_specifier_var
+            #(#parsed_properties)*
+            #properties
+          }
         },
       )
     }
@@ -232,18 +318,27 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
 
 #[allow(clippy::type_complexity)]
 fn handle_variant_or_struct(
+  inherit_properties: Option<InheritProperties>,
   class_attr: ClassAttrValue,
+  additional_properties: Vec<AdditionalProperty>,
   fields: Fields,
 ) -> Result<
   (
     TokenStream,
     TokenStream,
     Option<(Member, TokenStream)>,
+    Option<(Member, TokenStream)>,
     Vec<ParsedFieldProperty>,
   ),
   Error,
 > {
   let parsed_properties = get_properties_from_fields(&fields)?;
+
+  let inherit_properties =
+    inherit_properties.unwrap_or_else(|| match &class_attr {
+      ClassAttrValue::Inherit(kw) => InheritProperties::Inherit(*kw),
+      _ => InheritProperties::NoInherit(Default::default()),
+    });
 
   let properties = if !parsed_properties.is_empty() {
     let properties = parsed_properties
@@ -267,9 +362,9 @@ fn handle_variant_or_struct(
     None
   };
 
-  let inherit_member = match fields {
+  let (inherit_class_member, inherit_property_member) = match fields {
     Fields::Named(fields_named) => {
-      let field = if fields_named.named.len() == 1
+      let class_field = if fields_named.named.len() == 1
         && matches!(class_attr, ClassAttrValue::Inherit(_))
       {
         fields_named.named.first()
@@ -277,15 +372,32 @@ fn handle_variant_or_struct(
         fields_named.named.iter().find(get_inherit_attr_field)
       };
 
-      field.map(|field| {
+      let class_field = class_field.map(|field| {
         (
           Member::Named(field.ident.clone().unwrap()),
           field_inherit_reference(field),
         )
-      })
+      });
+
+      let property_field = if fields_named.named.len() == 1
+        && matches!(inherit_properties, InheritProperties::Inherit(_))
+      {
+        fields_named.named.first()
+      } else {
+        fields_named.named.iter().find(get_inherit_attr_field)
+      };
+
+      let property_field = property_field.map(|field| {
+        (
+          Member::Named(field.ident.clone().unwrap()),
+          field_inherit_reference(field),
+        )
+      });
+
+      (class_field, property_field)
     }
     Fields::Unnamed(fields_unnamed) => {
-      let field = if fields_unnamed.unnamed.len() == 1
+      let class_field = if fields_unnamed.unnamed.len() == 1
         && matches!(class_attr, ClassAttrValue::Inherit(_))
       {
         fields_unnamed.unnamed.first().map(|field| (0, field))
@@ -297,19 +409,40 @@ fn handle_variant_or_struct(
           .find(|(_, field)| get_inherit_attr_field(field))
       };
 
-      field.map(|(i, field)| {
+      let class_field = class_field.map(|(i, field)| {
         (
           Member::Unnamed(syn::Index::from(i)),
           field_inherit_reference(field),
         )
-      })
+      });
+
+      let property_field = if fields_unnamed.unnamed.len() == 1
+        && matches!(inherit_properties, InheritProperties::Inherit(_))
+      {
+        fields_unnamed.unnamed.first().map(|field| (0, field))
+      } else {
+        fields_unnamed
+          .unnamed
+          .iter()
+          .enumerate()
+          .find(|(_, field)| get_inherit_attr_field(field))
+      };
+
+      let property_field = property_field.map(|(i, field)| {
+        (
+          Member::Unnamed(syn::Index::from(i)),
+          field_inherit_reference(field),
+        )
+      });
+
+      (class_field, property_field)
     }
-    Fields::Unit => None,
+    Fields::Unit => (None, None),
   };
 
-  let class = class_attr.to_tokens(&inherit_member)?;
+  let class = class_attr.to_tokens(&inherit_class_member)?;
 
-  let properties = if let Some((_, tokens)) = &inherit_member {
+  let properties = if let Some((_, tokens)) = &inherit_property_member {
     let inherited_properties = quote!(::deno_error::JsErrorClass::get_additional_properties(
       #tokens
     ));
@@ -327,7 +460,27 @@ fn handle_variant_or_struct(
     properties.map_or_else(|| quote!(vec![]), |properties| quote!(#properties))
   };
 
-  Ok((class, properties, inherit_member, parsed_properties))
+  let properties = if !additional_properties.is_empty() {
+    let additional_properties = additional_properties
+      .into_iter()
+      .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
+
+    quote! {
+      let mut out = { #properties };
+      out.append(&mut vec![#(#additional_properties),*]);
+      out
+    }
+  } else {
+    quote!(#properties)
+  };
+
+  Ok((
+    class,
+    properties,
+    inherit_class_member,
+    inherit_property_member,
+    parsed_properties,
+  ))
 }
 
 fn get_inherit_attr_field(field: &&Field) -> bool {
@@ -341,6 +494,7 @@ mod kw {
   syn::custom_keyword!(class);
   syn::custom_keyword!(property);
   syn::custom_keyword!(inherit);
+  syn::custom_keyword!(no_inherit);
 }
 
 #[derive(Debug, Clone)]
@@ -508,6 +662,27 @@ impl Parse for AdditionalProperty {
       _eq: input.parse()?,
       value: input.parse()?,
     })
+  }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+enum InheritProperties {
+  Inherit(kw::inherit),
+  NoInherit(kw::no_inherit),
+}
+
+impl Parse for InheritProperties {
+  fn parse(input: ParseStream) -> syn::Result<Self> {
+    let lookahead = input.lookahead1();
+
+    if lookahead.peek(kw::inherit) {
+      Ok(InheritProperties::Inherit(input.parse()?))
+    } else if lookahead.peek(kw::no_inherit) {
+      Ok(InheritProperties::NoInherit(input.parse()?))
+    } else {
+      Err(lookahead.error())
+    }
   }
 }
 
