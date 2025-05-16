@@ -179,6 +179,9 @@ pub mod builtin_classes {
 }
 use builtin_classes::*;
 
+pub type AdditionalProperties =
+  Box<dyn Iterator<Item = (Cow<'static, str>, Cow<'static, str>)>>;
+
 /// Trait to implement how an error should be represented in JavaScript.
 ///
 /// **Note**:
@@ -194,9 +197,7 @@ pub trait JsErrorClass:
   fn get_message(&self) -> Cow<'static, str>;
 
   /// Additional properties that should be defined on the error in JavaScript side.
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)>;
+  fn get_additional_properties(&self) -> AdditionalProperties;
 
   fn as_any(&self) -> &dyn Any;
 }
@@ -256,13 +257,8 @@ macro_rules! js_error_wrapper {
       fn get_message(&self) -> std::borrow::Cow<'static, str> {
         self.to_string().into()
       }
-      fn get_additional_properties(
-        &self,
-      ) -> Vec<(
-        std::borrow::Cow<'static, str>,
-        std::borrow::Cow<'static, str>,
-      )> {
-        vec![]
+      fn get_additional_properties(&self) -> deno_error::AdditionalProperties {
+        Box::new(std::iter::empty())
       }
       fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -287,9 +283,7 @@ impl<T: JsErrorClass> JsErrorClass for Box<T> {
     (**self).get_message()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+  fn get_additional_properties(&self) -> AdditionalProperties {
     (**self).get_additional_properties()
   }
 
@@ -337,12 +331,12 @@ impl JsErrorClass for std::io::Error {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    get_error_code(self)
-      .map(|code| vec![("code".into(), code.into())])
-      .unwrap_or_default()
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    if let Some(code) = get_error_code(self) {
+      Box::new(std::iter::once(("code".into(), code.into())))
+    } else {
+      Box::new(Box::new(std::iter::empty()))
+    }
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -362,10 +356,8 @@ impl JsErrorClass for std::env::VarError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -382,10 +374,8 @@ impl JsErrorClass for std::sync::mpsc::RecvError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -402,10 +392,8 @@ impl JsErrorClass for std::str::Utf8Error {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -422,10 +410,8 @@ impl JsErrorClass for std::num::TryFromIntError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -442,10 +428,8 @@ impl JsErrorClass for std::convert::Infallible {
     unreachable!()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    unreachable!()
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    unreachable!();
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -475,10 +459,8 @@ impl JsErrorClass for serde_json::Error {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![] // TODO: could be io error code
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty()) // TODO: could be io error code
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -496,10 +478,8 @@ impl JsErrorClass for url::ParseError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -519,10 +499,8 @@ impl<T: Send + Sync + 'static> JsErrorClass
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -540,10 +518,8 @@ impl JsErrorClass for tokio::task::JoinError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -561,10 +537,8 @@ impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
     self.to_string().into()
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
-    vec![]
+  fn get_additional_properties(&self) -> AdditionalProperties {
+    Box::new(std::iter::empty())
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -630,11 +604,9 @@ impl JsErrorClass for JsErrorBox {
     }
   }
 
-  fn get_additional_properties(
-    &self,
-  ) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+  fn get_additional_properties(&self) -> AdditionalProperties {
     match &self.0 {
-      JsErrorBoxInner::Standalone { .. } => vec![],
+      JsErrorBoxInner::Standalone { .. } => Box::new(std::iter::empty()),
       JsErrorBoxInner::Wrap(inner) => inner.get_additional_properties(),
     }
   }
