@@ -174,10 +174,10 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
           #class_match_arm => #class,
         });
 
+        let properties =
+          properties.unwrap_or_else(|| quote!(std::iter::empty()));
         get_properties.push(quote! {
-          #match_arm => {
-            #properties
-          }
+          #match_arm => Box::new(#properties),
         });
       }
 
@@ -187,11 +187,11 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
             #(#get_class)*
           }
         },
-        quote! {
+        Some(quote! {
           match self {
             #(#get_properties)*
           }
-        },
+        }),
       )
     }
     Data::Struct(data) => {
@@ -260,18 +260,29 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
         })
         .collect::<Vec<_>>();
 
+      let out_properties = if property_specifier_var.is_none()
+        && parsed_properties.is_empty()
+        && properties.is_none()
+      {
+        None
+      } else {
+        let properties =
+          properties.unwrap_or_else(|| quote!(std::iter::empty()));
+        Some(quote! {
+          Box::new({
+            #property_specifier_var
+            #(#parsed_properties)*
+            #properties
+          })
+        })
+      };
+
       (
         quote! {
           #class_specifier_var
           #class
         },
-        quote! {
-          {
-            #property_specifier_var
-            #(#parsed_properties)*
-            #properties
-          }
-        },
+        out_properties,
       )
     }
     Data::Union(_) => {
@@ -284,12 +295,16 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       .into_iter()
       .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
 
-    quote! {
-      let mut out = #out_properties;
-      out.append(&mut vec![#(#additional_properties),*]);
-      out
+    let additional_properties =
+      quote!([#(#additional_properties),*].into_iter());
+    if let Some(out_properties) = out_properties {
+      quote!(Box::new({ *#out_properties }.chain(#additional_properties)))
+    } else {
+      quote!(Box::new(#additional_properties))
     }
   } else {
+    let out_properties =
+      out_properties.unwrap_or_else(|| quote!(Box::new(std::iter::empty())));
     quote!(#out_properties)
   };
 
@@ -306,7 +321,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       }
       fn get_additional_properties(
         &self
-      ) -> Vec<(::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>)> {
+      ) -> ::deno_error::AdditionalProperties {
         #properties
       }
       fn as_any(&self) -> &dyn ::std::any::Any {
@@ -325,7 +340,7 @@ fn handle_variant_or_struct(
 ) -> Result<
   (
     TokenStream,
-    TokenStream,
+    Option<TokenStream>,
     Option<(Member, TokenStream)>,
     Option<(Member, TokenStream)>,
     Vec<ParsedFieldProperty>,
@@ -357,7 +372,7 @@ fn handle_variant_or_struct(
       })
       .collect::<Vec<_>>();
 
-    Some(quote!(vec![#(#properties),*]))
+    Some(quote!([#(#properties),*].into_iter()))
   } else {
     None
   };
@@ -448,16 +463,12 @@ fn handle_variant_or_struct(
     ));
 
     if let Some(properties) = properties {
-      quote! {
-        let mut properties = #properties;
-        properties.extend(#inherited_properties);
-        properties
-      }
+      Some(quote!(#properties.chain(#inherited_properties)))
     } else {
-      inherited_properties
+      Some(inherited_properties)
     }
   } else {
-    properties.map_or_else(|| quote!(vec![]), |properties| quote!(#properties))
+    properties
   };
 
   let properties = if !additional_properties.is_empty() {
@@ -465,13 +476,16 @@ fn handle_variant_or_struct(
       .into_iter()
       .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
 
-    quote! {
-      let mut out = { #properties };
-      out.append(&mut vec![#(#additional_properties),*]);
-      out
+    let additional_properties =
+      quote!([#(#additional_properties),*].into_iter());
+
+    if let Some(properties) = properties {
+      Some(quote!(#properties.chain(#additional_properties)))
+    } else {
+      Some(additional_properties)
     }
   } else {
-    quote!(#properties)
+    properties
   };
 
   Ok((

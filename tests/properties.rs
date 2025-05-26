@@ -24,10 +24,16 @@ fn test_properties() {
     Io3(std::io::Error),
   }
 
-  assert_eq!(SomeError::Failure.get_additional_properties(), []);
+  assert_eq!(
+    SomeError::Failure
+      .get_additional_properties()
+      .collect::<Vec<_>>(),
+    []
+  );
   assert_eq!(
     SomeError::Io(std::io::Error::new(ErrorKind::AddrInUse, "foo"))
-      .get_additional_properties(),
+      .get_additional_properties()
+      .collect::<Vec<_>>(),
     [
       (Cow::Borrowed("code"), Cow::Borrowed("EADDRINUSE")),
       (Cow::Borrowed("foo"), Cow::Borrowed("1"))
@@ -35,7 +41,8 @@ fn test_properties() {
   );
   assert_eq!(
     SomeError::Io2(std::io::Error::new(ErrorKind::AddrInUse, "foo"))
-      .get_additional_properties(),
+      .get_additional_properties()
+      .collect::<Vec<_>>(),
     [
       (Cow::Borrowed("code"), Cow::Borrowed("EADDRINUSE")),
       (Cow::Borrowed("foo"), Cow::Borrowed("1"))
@@ -43,7 +50,8 @@ fn test_properties() {
   );
   assert_eq!(
     SomeError::Io3(std::io::Error::new(ErrorKind::AddrInUse, "foo"))
-      .get_additional_properties(),
+      .get_additional_properties()
+      .collect::<Vec<_>>(),
     []
   );
 }
