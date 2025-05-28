@@ -179,8 +179,48 @@ pub mod builtin_classes {
 }
 use builtin_classes::*;
 
+/// Represents a property value that can be either a string or a number
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyValue {
+  String(Cow<'static, str>),
+  Number(f64),
+}
+
+impl std::fmt::Display for PropertyValue {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      PropertyValue::String(s) => write!(f, "{}", s),
+      PropertyValue::Number(n) => write!(f, "{}", n),
+    }
+  }
+}
+
+impl From<String> for PropertyValue {
+  fn from(s: String) -> Self {
+    PropertyValue::String(Cow::Owned(s))
+  }
+}
+
+impl From<&'static str> for PropertyValue {
+  fn from(s: &'static str) -> Self {
+    PropertyValue::String(Cow::Borrowed(s))
+  }
+}
+
+impl From<f64> for PropertyValue {
+  fn from(n: f64) -> Self {
+    PropertyValue::Number(n)
+  }
+}
+
+impl From<i32> for PropertyValue {
+  fn from(n: i32) -> Self {
+    PropertyValue::Number(n as f64)
+  }
+}
+
 pub type AdditionalProperties =
-  Box<dyn Iterator<Item = (Cow<'static, str>, Cow<'static, str>)>>;
+  Box<dyn Iterator<Item = (Cow<'static, str>, PropertyValue)>>;
 
 /// Trait to implement how an error should be represented in JavaScript.
 ///
@@ -333,7 +373,10 @@ impl JsErrorClass for std::io::Error {
 
   fn get_additional_properties(&self) -> AdditionalProperties {
     if let Some(code) = get_error_code(self) {
-      Box::new(std::iter::once(("code".into(), code.into())))
+      Box::new(std::iter::once((
+        "code".into(),
+        PropertyValue::String(code.into()),
+      )))
     } else {
       Box::new(Box::new(std::iter::empty()))
     }
