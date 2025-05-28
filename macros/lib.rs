@@ -293,7 +293,20 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
   let properties = if !additional_properties.is_empty() {
     let additional_properties = additional_properties
       .into_iter()
-      .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
+      .map(|AdditionalProperty { name, value, .. }| {
+        // Check if the value is a literal number
+        match value {
+          syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(int_lit), .. }) => {
+            quote!((#name.into(), ::deno_error::PropertyValue::Number(#int_lit as f64)))
+          }
+          syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(float_lit), .. }) => {
+            quote!((#name.into(), ::deno_error::PropertyValue::Number(#float_lit)))
+          }
+          _ => {
+            quote!((#name.into(), ::deno_error::PropertyValue::String(#value.to_string().into())))
+          }
+        }
+      });
 
     let additional_properties =
       quote!([#(#additional_properties),*].into_iter());
@@ -366,7 +379,7 @@ fn handle_variant_or_struct(
         quote! {
           (
             ::std::borrow::Cow::Borrowed(#ident_str),
-            ::std::borrow::Cow::Owned(#i.to_string()),
+            ::deno_error::PropertyValue::String(::std::borrow::Cow::Owned(#i.to_string())),
           ),
         }
       })
@@ -474,7 +487,20 @@ fn handle_variant_or_struct(
   let properties = if !additional_properties.is_empty() {
     let additional_properties = additional_properties
       .into_iter()
-      .map(|AdditionalProperty { name, value, .. }| quote!((#name.into(), #value.to_string().into())));
+      .map(|AdditionalProperty { name, value, .. }| {
+        // Check if the value is a literal number
+        match value {
+          syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(int_lit), .. }) => {
+            quote!((#name.into(), ::deno_error::PropertyValue::Number(#int_lit as f64)))
+          }
+          syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Float(float_lit), .. }) => {
+            quote!((#name.into(), ::deno_error::PropertyValue::Number(#float_lit)))
+          }
+          _ => {
+            quote!((#name.into(), ::deno_error::PropertyValue::String(#value.to_string().into())))
+          }
+        }
+      });
 
     let additional_properties =
       quote!([#(#additional_properties),*].into_iter());
