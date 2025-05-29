@@ -26,6 +26,8 @@ fn test_properties() {
     Foo {
       #[property]
       errcode: f64,
+      #[property]
+      errcode2: f64,
     },
   }
 
@@ -72,10 +74,16 @@ fn test_properties() {
     []
   );
   assert_eq!(
-    SomeError::Foo { errcode: 1.0 }
-      .get_additional_properties()
-      .collect::<Vec<_>>(),
-    [(Cow::Borrowed("errcode"), PropertyValue::Number(1.0))]
+    SomeError::Foo {
+      errcode: 1.0,
+      errcode2: 1.0
+    }
+    .get_additional_properties()
+    .collect::<Vec<_>>(),
+    [
+      (Cow::Borrowed("errcode"), PropertyValue::Number(1.0)),
+      (Cow::Borrowed("errcode2"), PropertyValue::Number(1.0))
+    ]
   );
 }
 

@@ -364,7 +364,7 @@ fn handle_variant_or_struct(
         let ident_str = &property.name;
 
         quote! {
-          (::std::borrow::Cow::Borrowed(#ident_str), #i.into()),
+          (::std::borrow::Cow::Borrowed(#ident_str), #i.into())
         }
       })
       .collect::<Vec<_>>();
