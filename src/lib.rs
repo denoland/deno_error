@@ -213,9 +213,33 @@ impl From<f64> for PropertyValue {
   }
 }
 
+impl From<&f64> for PropertyValue {
+  fn from(n: &f64) -> Self {
+    PropertyValue::Number(*n)
+  }
+}
+
 impl From<i32> for PropertyValue {
   fn from(n: i32) -> Self {
     PropertyValue::Number(n as f64)
+  }
+}
+
+impl From<&i32> for PropertyValue {
+  fn from(n: &i32) -> Self {
+    PropertyValue::Number(*n as f64)
+  }
+}
+
+impl From<u32> for PropertyValue {
+  fn from(n: u32) -> Self {
+    PropertyValue::Number(n as f64)
+  }
+}
+
+impl From<&u32> for PropertyValue {
+  fn from(n: &u32) -> Self {
+    PropertyValue::Number(*n as f64)
   }
 }
 
