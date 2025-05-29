@@ -22,6 +22,11 @@ fn test_properties() {
     #[properties(no_inherit)]
     #[error(transparent)]
     Io3(std::io::Error),
+    #[error("")]
+    Foo {
+      #[property]
+      errcode: f64,
+    },
   }
 
   assert_eq!(
@@ -65,6 +70,12 @@ fn test_properties() {
       .get_additional_properties()
       .collect::<Vec<_>>(),
     []
+  );
+  assert_eq!(
+    SomeError::Foo { errcode: 1.0 }
+      .get_additional_properties()
+      .collect::<Vec<_>>(),
+    [(Cow::Borrowed("errcode"), PropertyValue::Number(1.0))]
   );
 }
 

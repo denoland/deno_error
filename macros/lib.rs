@@ -364,10 +364,7 @@ fn handle_variant_or_struct(
         let ident_str = &property.name;
 
         quote! {
-          (
-            ::std::borrow::Cow::Borrowed(#ident_str),
-            ::deno_error::PropertyValue::String(::std::borrow::Cow::Owned(#i.to_string())),
-          ),
+          (::std::borrow::Cow::Borrowed(#ident_str), #i.into()),
         }
       })
       .collect::<Vec<_>>();
@@ -484,7 +481,7 @@ fn handle_variant_or_struct(
             quote!((#name.into(), ::deno_error::PropertyValue::Number(#float_lit)))
           }
           _ => {
-            quote!((#name.into(), ::deno_error::PropertyValue::String(#value.to_string().into())))
+            quote!((#name.into(), #value.into()))
           }
         }
       });
