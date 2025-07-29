@@ -324,7 +324,7 @@ fn js_error(item: TokenStream) -> Result<TokenStream, Error> {
       ) -> ::deno_error::AdditionalProperties {
         #properties
       }
-      fn as_any(&self) -> &dyn ::std::any::Any {
+      fn get_ref(&self) -> &(dyn ::std::error::Error + Send + Sync + 'static) {
         self
       }
     }
