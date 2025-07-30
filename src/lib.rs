@@ -263,7 +263,7 @@ pub trait JsErrorClass:
   /// Additional properties that should be defined on the error in JavaScript side.
   fn get_additional_properties(&self) -> AdditionalProperties;
 
-  fn as_any(&self) -> &dyn Any;
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static);
 }
 
 /// Macro which lets you wrap an existing error in a new error that implements
@@ -324,7 +324,7 @@ macro_rules! js_error_wrapper {
       fn get_additional_properties(&self) -> deno_error::AdditionalProperties {
         Box::new(std::iter::empty())
       }
-      fn as_any(&self) -> &dyn std::any::Any {
+      fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
         self
       }
     }
@@ -351,7 +351,7 @@ impl<T: JsErrorClass> JsErrorClass for Box<T> {
     (**self).get_additional_properties()
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -406,7 +406,7 @@ impl JsErrorClass for std::io::Error {
     }
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -427,7 +427,7 @@ impl JsErrorClass for std::env::VarError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -445,7 +445,7 @@ impl JsErrorClass for std::sync::mpsc::RecvError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -463,7 +463,7 @@ impl JsErrorClass for std::str::Utf8Error {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -481,7 +481,7 @@ impl JsErrorClass for std::num::TryFromIntError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -499,7 +499,7 @@ impl JsErrorClass for std::convert::Infallible {
     unreachable!();
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     unreachable!()
   }
 }
@@ -530,7 +530,7 @@ impl JsErrorClass for serde_json::Error {
     Box::new(std::iter::empty()) // TODO: could be io error code
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -549,7 +549,7 @@ impl JsErrorClass for url::ParseError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -570,7 +570,7 @@ impl<T: Send + Sync + 'static> JsErrorClass
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -589,7 +589,7 @@ impl JsErrorClass for tokio::task::JoinError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -608,7 +608,7 @@ impl JsErrorClass for tokio::sync::broadcast::error::RecvError {
     Box::new(std::iter::empty())
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     self
   }
 }
@@ -678,10 +678,10 @@ impl JsErrorClass for JsErrorBox {
     }
   }
 
-  fn as_any(&self) -> &dyn Any {
+  fn get_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
     match &self.0 {
       JsErrorBoxInner::Standalone { .. } => self,
-      JsErrorBoxInner::Wrap(inner) => inner.as_any(),
+      JsErrorBoxInner::Wrap(inner) => inner.get_ref(),
     }
   }
 }
@@ -720,6 +720,15 @@ impl JsErrorBox {
   // Non-standard errors
   pub fn not_supported() -> JsErrorBox {
     Self::new(NOT_SUPPORTED_ERROR, "The operation is not supported")
+  }
+
+  pub fn get_inner_ref(
+    &self,
+  ) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
+    match &self.0 {
+      JsErrorBoxInner::Standalone { .. } => None,
+      JsErrorBoxInner::Wrap(inner) => Some(inner.get_ref()),
+    }
   }
 }
 
