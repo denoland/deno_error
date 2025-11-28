@@ -514,8 +514,8 @@ impl JsErrorClass for serde_json::Error {
       Category::Io => self
         .source()
         .and_then(|e| e.downcast_ref::<std::io::Error>())
-        .unwrap()
-        .get_class(),
+        .map(|e| e.get_class())
+        .unwrap_or_else(|| Cow::Borrowed("Error")),
       Category::Syntax => Cow::Borrowed(SYNTAX_ERROR),
       Category::Data => Cow::Borrowed("InvalidData"),
       Category::Eof => Cow::Borrowed("UnexpectedEof"),
